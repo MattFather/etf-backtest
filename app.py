@@ -128,8 +128,8 @@ def generate_brokerage_html(results_dict):
         # 表格每一行的 HTML
         rows_html += f"""<tr style="background-color: white; text-align: right; border-bottom: 1px solid #a0b0d0;">
 <td style="text-align: center; padding: 4px; border: 1px solid #a0b0d0;"><span style="background-color: #DC765D; color: white; padding: 2px 6px; border-radius: 2px; font-size: 13px;">明細</span></td>
-<td style="text-align: center; border: 1px solid #a0b0d0; color: black;">{display_name}</td>
-<td style="text-align: center; border: 1px solid #a0b0d0; color: black;">現股</td>
+<td style="text-align: center; border: 1px solid #a0b0d0; color: black; white-space: nowrap;">{display_name}</td>
+<td style="text-align: center; border: 1px solid #a0b0d0; color: black; white-space: nowrap;">現股</td>
 <td style="border: 1px solid #a0b0d0; padding-right: 5px; color: black;">{shares:,}</td>
 <td style="border: 1px solid #a0b0d0; padding-right: 5px; color: black;">{price:,.2f}</td>
 <td style="border: 1px solid #a0b0d0; padding-right: 5px; color: black;">{market_value:,.0f}</td>
@@ -145,35 +145,52 @@ def generate_brokerage_html(results_dict):
     total_pnl_color = "#A32020" if total_pnl > 0 else ("#008000" if total_pnl < 0 else "black")
     total_pnl_sign = "+" if total_pnl > 0 else ""
     
-    # 組合完整的 HTML UI (包含 html2canvas 腳本與下載按鈕)
+    # 組合完整的 HTML UI (修復手機版破版問題)
     html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        body {{ font-family: 'Microsoft JhengHei', sans-serif; margin: 0; padding: 10px; }}
+        body {{ font-family: 'Microsoft JhengHei', sans-serif; margin: 0; padding: 10px; overflow-x: auto; }}
         .download-btn {{
             background-color: #2b7bc4; color: white; padding: 10px 20px; border: none;
             border-radius: 5px; cursor: pointer; font-size: 15px; margin-bottom: 15px;
             font-weight: bold; transition: 0.3s;
         }}
         .download-btn:hover {{ background-color: #1a5c99; }}
+        
+        /* 💡 修正 1：鎖死截圖區塊寬度，不受手機螢幕壓縮 */
+        #capture-area {{
+            background-color: #f7f9fc; 
+            padding: 15px; 
+            border-radius: 5px; 
+            display: inline-block;
+            min-width: 1050px; 
+        }}
+        
+        /* 💡 修正 2：強制標題文字不准換行 */
+        .title-row {{
+            font-size: 22px; 
+            margin-bottom: 10px; 
+            color: black; 
+            white-space: nowrap; 
+        }}
     </style>
 </head>
 <body>
     <button class="download-btn" onclick="downloadImage()">📸 下載對帳單圖片 (PNG)</button>
     
     <!-- 這是準備被截圖的區塊 -->
-    <div id="capture-area" style="background-color: #f7f9fc; padding: 15px; border-radius: 5px; display: inline-block;">
-        <div style="font-size: 22px; margin-bottom: 10px; color: black; min-width: 800px;">
+    <div id="capture-area">
+        <div class="title-row">
         預估總損益:<span style="color: {total_pnl_color}; font-weight: normal;">{total_pnl_sign}{total_pnl:,.0f}</span>&nbsp;&nbsp;&nbsp;
         預估總市值:<span style="font-weight: normal;">{total_value:,.0f}</span>&nbsp;&nbsp;&nbsp;
         預估總報酬率:<span style="color: {total_pnl_color}; font-weight: normal;">{total_pnl_sign}{total_roi:.2f}%</span>&nbsp;&nbsp;&nbsp;
         <span style="font-size: 18px; font-weight: normal; color: black;">筆數:{len(results_dict)}(頁次 1/1)</span>
         </div>
-        <table style="width: 100%; min-width: 1000px; border-collapse: collapse; text-align: right; font-size: 15px; border: 1px solid #a0b0d0; background-color: white;">
-        <tr style="background-color: #c9d9f9; text-align: center; color: black;">
+        <table style="width: 100%; border-collapse: collapse; text-align: right; font-size: 15px; border: 1px solid #a0b0d0; background-color: white;">
+        <tr style="background-color: #c9d9f9; text-align: center; color: black; white-space: nowrap;">
         <th style="padding: 6px; border: 1px solid #a0b0d0; font-weight: normal;">明細</th>
         <th style="padding: 6px; border: 1px solid #a0b0d0; font-weight: normal;">商品</th>
         <th style="padding: 6px; border: 1px solid #a0b0d0; font-weight: normal;">交易類別</th>
@@ -194,7 +211,7 @@ def generate_brokerage_html(results_dict):
     <script>
     function downloadImage() {{
         var element = document.getElementById('capture-area');
-        // scale: 2 可以讓輸出的 PNG 畫質更高(Retina級別)
+        // scale: 2 可以讓輸出的 PNG 畫質更高
         html2canvas(element, {{ scale: 2 }}).then(function(canvas) {{
             var link = document.createElement('a');
             link.download = '模擬券商對帳單.png';
@@ -216,7 +233,6 @@ def run_single_backtest(task, fee_rate_pct, min_fee_amt):
     if df.empty:
         return None, f"找不到標的 {task['ticker']} 的資料"
     
-    # 💡 【錯誤修正：資料清洗】
     df = df.dropna(subset=['Close'])
     df['Dividends'] = df['Dividends'].fillna(0)
     
@@ -225,7 +241,6 @@ def run_single_backtest(task, fee_rate_pct, min_fee_amt):
         
     actual_fee_rate = fee_rate_pct / 100
     
-    # 變數初始化
     shares_drip = 0
     cash_pool_drip = 0       
     unused_capital_drip = 0  
@@ -247,7 +262,6 @@ def run_single_backtest(task, fee_rate_pct, min_fee_amt):
         price = row['Close']
         dividend = row['Dividends']
         
-        # 1. 資金注入邏輯
         injected_today = 0
         if current_date == df.index[0]:
             injected_today += task['initial']
@@ -265,12 +279,10 @@ def run_single_backtest(task, fee_rate_pct, min_fee_amt):
             capital_cash_no += injected_today
             unused_capital_no += injected_today
 
-        # 2. 股息發放邏輯
         if dividend > 0:
             cash_pool_drip += (shares_drip * dividend)
             div_cash_no += (shares_no * dividend) 
 
-        # 3. 買進邏輯函數
         def buy_lots(available_cash, current_price):
             cost_per_lot = current_price * 1000
             lots = 0
@@ -289,7 +301,6 @@ def run_single_backtest(task, fee_rate_pct, min_fee_amt):
                 return lots * 1000, int(stock_cost + fee)
             return 0, 0
 
-        # 執行 DRIP 買進
         new_shares_drip, total_cost_drip = buy_lots(cash_pool_drip, price)
         if new_shares_drip > 0:
             cash_pool_drip -= total_cost_drip
@@ -299,7 +310,6 @@ def run_single_backtest(task, fee_rate_pct, min_fee_amt):
             unused_capital_drip -= prin_used
             deployed_capital_drip += prin_used
 
-        # 執行 單純領息買進
         new_shares_no, total_cost_no = buy_lots(capital_cash_no, price)
         if new_shares_no > 0:
             capital_cash_no -= total_cost_no
@@ -309,7 +319,6 @@ def run_single_backtest(task, fee_rate_pct, min_fee_amt):
             unused_capital_no -= prin_used_no
             deployed_capital_no += prin_used_no
 
-        # 4. 結算每日資產
         stock_val_drip = int(shares_drip * price)
         total_val_drip = stock_val_drip + int(cash_pool_drip)
         unrealized_pnl_drip = stock_val_drip - holding_cost_drip
